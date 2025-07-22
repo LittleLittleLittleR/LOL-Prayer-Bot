@@ -13,8 +13,11 @@ from state import (
 
 
 async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    chat = update.effective_chat
+    if chat.type != 'private':
+        return
 
+    user_id = update.effective_user.id
     viewer_groups = user_groups.get(user_id, set())
 
     public_requests = []
@@ -47,7 +50,6 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
         for r in public_requests:
             name = "Anonymous" if r.is_anonymous else r.username
             prayed = " (✔️ Prayed)" if user_id in r.prayed_users else ""
-            lines.append(f'• <b>{name}</b>: {r.text}')
             lines.append(f'• <b>{name}</b>: {r.text}{prayed}')
         lines.append("")  # Add spacing
 
