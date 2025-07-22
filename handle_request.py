@@ -30,7 +30,6 @@ class PrayerRequest:
     is_anonymous: bool
     joined_users: Set[int] = field(default_factory=set)
     prayed_users: Set[int] = field(default_factory=set)
-    group_id: int | None = None
     visibility: str = "public"  # "public" or "group"
 
 prayer_requests: Dict[str, PrayerRequest] = {}
@@ -99,7 +98,6 @@ async def select_visibility(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id=user.id,
                 username=user.username or f"user_{user.id}",
                 is_anonymous=is_anon,
-                group_id=gid,
                 visibility=vis
             )
             prayer_requests[req.id] = req
@@ -115,7 +113,6 @@ async def select_visibility(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_id=user.id,
             username=user.username or f"user_{user.id}",
             is_anonymous=is_anon,
-            group_id=None,
             visibility=vis
         )
 
@@ -126,7 +123,6 @@ async def select_visibility(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    group_id = int(query.data.split("_", 2)[2])
 
     data = context.user_data.pop('pending_request')
     req = PrayerRequest(
@@ -135,7 +131,6 @@ async def select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id=query.from_user.id,
         username=query.from_user.username or f"user_{query.from_user.id}",
         is_anonymous=data['is_anon'],
-        group_id=group_id,
         visibility=data['visibility']
     )
 
