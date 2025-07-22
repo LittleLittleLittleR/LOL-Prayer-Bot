@@ -64,10 +64,34 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
     while lines and lines[-1] == "":
         lines.pop()
 
-    await update.message.reply_text(
-        "\n".join(lines),
-        parse_mode=ParseMode.HTML
-    )
+    # Send public requests individually
+    for r in public_requests:
+        name = "Anonymous" if r.is_anonymous else r.username
+        prayed = " ✔️" if user_id in r.prayed_users else ""
+        button_text = f"{r.text}{prayed}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')]
+        ])
+        await update.message.reply_text(
+            f"{name}:",  # plain text name
+            reply_markup=keyboard
+        )
+
+    # For group requests (same format)
+    for gid, requests in group_requests_by_chat.items():
+        title = group_titles.get(gid, f"Group {gid}")
+        await update.message.reply_text(f'<b>-- {title} --</b>', parse_mode=ParseMode.HTML)
+        for r in requests:
+            name = "Anonymous" if r.is_anonymous else r.username
+            prayed = " ✔️" if user_id in r.prayed_users else ""
+            button_text = f"{r.text}{prayed}"
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')]
+            ])
+            await update.message.reply_text(
+                f"{name}:",  # plain text name
+                reply_markup=keyboard
+            )
 
 async def handle_public_request_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

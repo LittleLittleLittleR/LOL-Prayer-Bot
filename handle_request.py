@@ -150,7 +150,7 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not my_requests:
         await update.message.reply_text("You haven't added any prayer requests yet. Use /add_request to start.")
         return
-    keyboard = [[InlineKeyboardButton(f"{req.text[:30]}", callback_data=f"view_{req.id}")] for req in my_requests]
+    keyboard = [[InlineKeyboardButton(f"{req.text[:50]}", callback_data=f"view_{req.id}")] for req in my_requests]
     keyboard.append([InlineKeyboardButton("➕ Add Request", callback_data="add_new")])
     await update.message.reply_text(
         "📝 Your Prayer Requests:",
