@@ -60,7 +60,8 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Batch group requests (per group)
     for gid, requests in group_requests_by_chat.items():
-        title = f"<b>-- Requests from {group_titles.get(gid, f"Group {gid}")} --<b>"
+        group_name = group_titles.get(gid, f"Group {gid}")
+        title = f"<b>-- Requests from {group_name} --</b>"
         keyboard_buttons = []
         for r in requests:
             name = "Anonymous" if r.is_anonymous else r.username
