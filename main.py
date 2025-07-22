@@ -64,9 +64,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         '/start - Start the bot\n'
         '/help - Show help\n'
         '/add_request - Add a prayer request\n'
-        '/my_requests_list - List your prayer requests\n'
-        '/request_list - List public prayer requests\n'
+        '/my_requests_list - List and manange your prayer requests\n'
+        '/request_list - List and pray for public prayer requests\n'
         '/stats - View stats'
+        '/cancel - Cancel any ongoing conversation'
     )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
