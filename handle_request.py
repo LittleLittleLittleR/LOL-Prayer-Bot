@@ -1,18 +1,22 @@
 # handle_request.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
-from dataclasses import dataclass, field
+from telegram.constants import ParseMode
 from uuid import uuid4
-from typing import Set, Dict
 from dotenv import load_dotenv
 import os
 from state import (
     ADD_TEXT, 
     ADD_ANON,
     SELECT_VISIBILITY,
-    SELECT_GROUP,
-    user_groups,
-    group_titles,
+    PrayerRequest,
+)
+from database import (
+    get_user_requests,
+    insert_prayer_request,
+    get_request_by_id,
+    delete_request_by_id,
+    get_user_groups,
 )
 
 # Load environment variables
@@ -20,21 +24,12 @@ load_dotenv()
 
 BOT_ID = int(os.getenv("BOT_ID"))
 
-# Data model and store
-@dataclass
-class PrayerRequest:
-    id: str
-    text: str
-    user_id: int
-    username: str
-    is_anonymous: bool
-    joined_users: Set[int] = field(default_factory=set)
-    prayed_users: Set[int] = field(default_factory=set)
-    visibility: str = "public"  # "public" or "group"
-
-prayer_requests: Dict[str, PrayerRequest] = {}
 
 async def add_request_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type != 'private':
+        return
+    
     context.user_data.clear()
 
     if update.callback_query:
@@ -79,44 +74,34 @@ async def select_visibility(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         await query.edit_message_text("❌ Error: No text found for your prayer request.")
         return ConversationHandler.END
+    
+    req = PrayerRequest(
+        id=str(uuid4()),
+        user_id=user.id,
+        username=user.username or f"user_{user.id}",
+        text=text,
+        is_anonymous=is_anon,
+        visibility=vis
+    )
 
     if vis == "group":
         # Find shared groups of user and bot
-        user_gs = user_groups.get(user.id, set())
-        bot_gs = user_groups.get(BOT_ID, set())  # groups where bot is member
+        user_gs = get_user_groups(user.id)
+        bot_gs = get_user_groups(BOT_ID)  # groups where bot is member
         shared_groups = user_gs & bot_gs
 
         if not shared_groups:
             await query.edit_message_text("⚠️ You are not in any group with the bot, so you can't add a group-only request.")
             return ConversationHandler.END
 
-        # Create a prayer request for each shared group
-        for gid in shared_groups:
-            req = PrayerRequest(
-                id=str(uuid4()),
-                text=text,
-                user_id=user.id,
-                username=user.username or f"user_{user.id}",
-                is_anonymous=is_anon,
-                visibility=vis
-            )
-            prayer_requests[req.id] = req
+        insert_prayer_request(req)
 
         await query.edit_message_text(f"✅ Your group-only prayer request has been added to {len(shared_groups)} group(s).")
         return ConversationHandler.END
 
     else:
+        insert_prayer_request(req)
 
-        req = PrayerRequest(
-            id=str(uuid4()),
-            text=text,
-            user_id=user.id,
-            username=user.username or f"user_{user.id}",
-            is_anonymous=is_anon,
-            visibility=vis
-        )
-
-        prayer_requests[req.id] = req
         await query.edit_message_text("✅ Your prayer request has been added.")
         return ConversationHandler.END
 
@@ -127,25 +112,30 @@ async def select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = context.user_data.pop('pending_request')
     req = PrayerRequest(
         id=str(uuid4()),
-        text=data['text'],
         user_id=query.from_user.id,
         username=query.from_user.username or f"user_{query.from_user.id}",
+        text=data['text'],
         is_anonymous=data['is_anon'],
         visibility=data['visibility']
     )
 
-    prayer_requests[req.id] = req
+    insert_prayer_request(req)
+
     await query.edit_message_text("✅ Your group-only prayer request has been added.")
     return ConversationHandler.END
 
 # --- List user's own prayer requests ---
 async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type != 'private':
+        return
+
     user_id = update.effective_user.id
-    my_requests = [req for req in prayer_requests.values() if req.user_id == user_id]
+    my_requests = get_user_requests(user_id)
     if not my_requests:
         await update.message.reply_text("You haven't added any prayer requests yet. Use /add_request to start.")
         return
-    keyboard = [[InlineKeyboardButton(f"{req.text[:50]}", callback_data=f"view_{req.id}")] for req in my_requests]
+    keyboard = [[InlineKeyboardButton(f"{req['text'][:50]}", callback_data=f"view_{req['id']}")] for req in my_requests]
     keyboard.append([InlineKeyboardButton("➕ Add Request", callback_data="add_new")])
     await update.message.reply_text(
         "📝 Your Prayer Requests:",
@@ -165,7 +155,7 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
 
     if data.startswith("view_"):
         req_id = data.split("_", 1)[1]
-        req = prayer_requests.get(req_id)
+        req = get_request_by_id(req_id)
         if not req:
             return await query.edit_message_text("⚠️ This request no longer exists.")
         if req.user_id != user_id:
@@ -174,12 +164,12 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
         return await query.edit_message_text(
             f"📃 *Your Prayer Request: *{req.text}",
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
+            parse_mode=ParseMode.HTML
         )
     if data.startswith("remove_"):
         req_id = data.split("_", 1)[1]
-        req = prayer_requests.get(req_id)
+        req = get_request_by_id(req_id)
         if req and req.user_id == user_id:
-            prayer_requests.pop(req_id, None)
+            delete_request_by_id(req_id)
             return await query.edit_message_text("✅ Your request has been removed.")
         return await query.edit_message_text("❌ Could not remove the request.")

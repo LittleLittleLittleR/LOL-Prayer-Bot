@@ -2,13 +2,20 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
-from handle_request import prayer_requests
 from state import (
     PRAY_TEXT,
-    PRAY_AUDIO, 
-    group_members,
-    user_groups,
-    group_titles,
+    PRAY_AUDIO,
+)
+from database import (
+    get_request_by_id,
+    get_all_prayer_requests,
+    get_user_groups,
+    get_group_title,
+    mark_prayed,
+    get_all_prayed_users,
+    mark_joined,
+    unmark_joined,
+    get_joined_users,
 )
 
 
@@ -18,13 +25,15 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     user_id = update.effective_user.id
-    viewer_groups = user_groups.get(user_id, set())
+    viewer_groups = get_user_groups(user_id)
 
     public_requests = []
     group_requests_by_chat = {}
 
+    # Fetch all prayer requests
+    all_requests = get_all_prayer_requests()
 
-    for r in prayer_requests.values():
+    for r in all_requests:
         if r.user_id == user_id:
             continue
 
@@ -32,7 +41,7 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
             public_requests.append(r)
 
         elif r.visibility == "group":
-            creator_groups = user_groups.get(r.user_id, set())
+            creator_groups = get_user_groups(user_id)
             shared_groups = viewer_groups & creator_groups
             for gid in shared_groups:
                 group_requests_by_chat.setdefault(gid, []).append(r)
@@ -40,13 +49,16 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if not public_requests and not group_requests_by_chat:
         await update.message.reply_text('No prayer requests from others are available.')
         return
+    
+    all_prayed = get_all_prayed_users()
 
     # Send public requests together
     if public_requests:
         keyboard_buttons = []
         for r in public_requests:
             name = "Anonymous" if r.is_anonymous else r.username
-            prayed = " ✔️" if user_id in r.prayed_users else ""
+            prayed_users = all_prayed.get(r.id, set())
+            prayed = " ✔️" if user_id in prayed_users else ""
             button_text = f"{name}: {r.text}{prayed}"
             keyboard_buttons.append(
                 [InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')]
@@ -60,12 +72,13 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Batch group requests (per group)
     for gid, requests in group_requests_by_chat.items():
-        group_name = group_titles.get(gid, f"Group {gid}")
+        group_name = get_group_title(gid)
         title = f"<b>-- Requests from {group_name} --</b>"
         keyboard_buttons = []
         for r in requests:
             name = "Anonymous" if r.is_anonymous else r.username
-            prayed = " ✔️" if user_id in r.prayed_users else ""
+            prayed_users = all_prayed.get(r.id, set())
+            prayed = " ✔️" if user_id in prayed_users else ""
             button_text = f"{name}: {r.text}{prayed}"
             keyboard_buttons.append([
                 InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')
@@ -80,8 +93,9 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
     query = update.callback_query
     await query.answer()
     req_id = query.data.split('_', 2)[2]
-    req = prayer_requests.get(req_id)
-    joined = query.from_user.id in req.joined_users
+    req = get_request_by_id(req_id)
+    joined_users = get_joined_users(req.id)
+    joined = query.from_user.id in joined_users
     join_cb = f'unjoin_{req.id}' if joined else f'join_{req.id}'
     keyboard = [
         [InlineKeyboardButton('Mark as prayed', callback_data=f'pray_{req.id}')],
@@ -91,7 +105,7 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
     ]
     await query.edit_message_text(
         f'*Prayer Request: *{req.text}',
-        parse_mode='Markdown',
+        parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -99,23 +113,28 @@ async def handle_request_actions(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     action, req_id = query.data.split('_', 1)
-    req = prayer_requests.get(req_id)
+    req = get_request_by_id(req_id)
     user_id = query.from_user.id
     if action == 'pray':
-        req.prayed_users.add(user_id)
+        mark_prayed(user_id, req.id)
 
         message = f'Someone prayed for your request: {req.text}'
         await context.bot.send_message(chat_id=req.user_id, text=message)
 
         notify = f'Someone prayed for a request you joined: {req.text}'
-        for uid in req.joined_users:
+        joined_users = get_joined_users(req.id)
+        for uid in joined_users:
             if uid != user_id:
                 await context.bot.send_message(chat_id=uid, text=notify)
         await query.edit_message_text('✅ Marked as prayed.')
 
-    elif action in ('join', 'unjoin'):
-        (req.joined_users.add if action == 'join' else req.joined_users.discard)(user_id)
-        await query.edit_message_text(action == 'join' and 'Joined' or 'Unjoined')
+    elif action == 'join':
+        mark_joined(user_id, req.id)
+        await query.edit_message_text('✅ You joined the prayer request.')
+    
+    elif action == 'unjoin':
+        unmark_joined(user_id, req.id)
+        await query.edit_message_text('✅ You left the prayer request.')
 
 async def pray_text_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
@@ -130,13 +149,13 @@ async def pray_text_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def pray_text_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req_id = context.user_data.pop('praying_req', None)
     if req_id:
-        req = prayer_requests[req_id]
+        req = get_request_by_id(req_id)
         message = (
             f'✍️ Someone sent a written prayer\n'
             f'*Request: *{req.text}\n'
             f'*Prayer: *{update.message.text}'
         )
-        await context.bot.send_message(chat_id=req.user_id, text=message, parse_mode='Markdown')
+        await context.bot.send_message(chat_id=req.user_id, text=message, parse_mode=ParseMode.HTML)
         await update.message.reply_text('✅ Your prayer was sent.')
     context.user_data.clear()
     return ConversationHandler.END
@@ -154,7 +173,7 @@ async def pray_audio_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def pray_audio_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req_id = context.user_data.pop('praying_req', None)
     if req_id and update.message.voice:
-        req = prayer_requests[req_id]
+        req = get_request_by_id(req_id)
         caption = f'🎤 Someone sent an audio prayer\nRequest: {req.text}'
         await context.bot.send_voice(chat_id=req.user_id, voice=update.message.voice.file_id, caption=caption)
         await update.message.reply_text('✅ Your audio prayer was sent.')

@@ -1,5 +1,10 @@
 # main.py
 from telegram import Update
+import asyncio
+import platform
+import os
+from dotenv import load_dotenv
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -9,11 +14,6 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-import asyncio
-import platform
-import os
-from dotenv import load_dotenv
-
 from handle_request import (
     add_request_start,
     add_request_text,
@@ -39,9 +39,11 @@ from state import (
     SELECT_GROUP,
     PRAY_TEXT, 
     PRAY_AUDIO,
-    group_members,
-    user_groups,
-    group_titles,
+)
+from database import (
+    init_db,
+    save_user_group_membership,
+    save_group_title,
 )
 
 # Load environment variables
@@ -108,11 +110,10 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if chat.type not in ["group", "supergroup"]:
         return
 
-    # Track group members
-    group_members.setdefault(chat.id, set()).add(user.id)
-    user_groups.setdefault(user.id, set()).add(chat.id)
-    user_groups.setdefault(BOT_ID, set()).add(chat.id)
-    group_titles[chat.id] = chat.title
+    # Save group membership
+    save_user_group_membership(user.id, chat.id)
+    save_user_group_membership(BOT_ID, chat.id)
+    save_group_title(chat.id, chat.title or f"Group {chat.id}")
 # ────────────────────────────────────────────────────────────────────────────────
 
 def main():
@@ -139,6 +140,8 @@ def main():
 
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.ALL, handle_group_message))
 
+    init_db()  # Initialize the database
+    
     app.run_polling()
 
 if __name__ == '__main__':
