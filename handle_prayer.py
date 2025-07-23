@@ -152,10 +152,14 @@ async def pray_text_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         req = get_request_by_id(req_id)
         message = (
             f'✍️ Someone sent a written prayer\n'
-            f'*Request: *{req.text}\n'
-            f'*Prayer: *{update.message.text}'
+            f'<b>Request:</b> {req.text}\n'
+            f'<b>Prayer:</b> {update.message.text}'
         )
-        await context.bot.send_message(chat_id=req.user_id, text=message, parse_mode=ParseMode.HTML)
+        await context.bot.send_message(
+            chat_id=req.user_id, 
+            text=message, 
+            parse_mode=ParseMode.HTML
+        )
         await update.message.reply_text('✅ Your prayer was sent.')
     context.user_data.clear()
     return ConversationHandler.END
@@ -174,8 +178,13 @@ async def pray_audio_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req_id = context.user_data.pop('praying_req', None)
     if req_id and update.message.voice:
         req = get_request_by_id(req_id)
-        caption = f'🎤 Someone sent an audio prayer\nRequest: {req.text}'
-        await context.bot.send_voice(chat_id=req.user_id, voice=update.message.voice.file_id, caption=caption)
+        caption = f'🎤 Someone sent an audio prayer\n<b>Request:</b> {req.text}'
+        await context.bot.send_voice(
+            chat_id=req.user_id,
+            voice=update.message.voice.file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML
+        )
         await update.message.reply_text('✅ Your audio prayer was sent.')
     context.user_data.clear()
     return ConversationHandler.END
