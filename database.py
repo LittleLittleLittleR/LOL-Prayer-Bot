@@ -167,7 +167,6 @@ def get_all_prayed_users() -> dict[int, set[int]]:
         prayed_map = defaultdict(set)
         for req_id, user_id in cursor.fetchall():
             prayed_map[req_id].add(user_id)
-        conn.close()
         return prayed_map
     
 # Joined_Users functions
