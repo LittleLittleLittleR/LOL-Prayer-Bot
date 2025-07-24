@@ -39,54 +39,55 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
         creator_groups = get_user_groups(r.user_id)
         shared_groups = viewer_groups & creator_groups
         if shared_groups:
-            filtered_requests.append(r)
+            filtered_requests.append((r, shared_groups))
 
     if not filtered_requests:
         await update.message.reply_text('No prayer requests from others are available.')
         return
-    
-    # Group requests by username (anonymous usernames will be sorted at the end)
-    requests_by_user = {}
-    for r in filtered_requests:
-        key = r.username if not r.is_anonymous else None
-        requests_by_user.setdefault(key, []).append(r)
 
-    # Sort users alphabetically, placing None (anonymous) last
-    sorted_usernames = sorted(
-        [u for u in requests_by_user.keys() if u is not None],
-        key=lambda x: x.lower()
-    )
-    if None in requests_by_user:
-        sorted_usernames.append(None)
-    
     all_prayed = get_all_prayed_users()
 
-    # Send group requests by user
-    for username in sorted_usernames:
-        requests = requests_by_user[username]
-        # Group by chat (group_id)
-        group_requests_by_chat = {}
-        for r in requests:
-            creator_groups = get_user_groups(r.user_id)
-            shared_groups = viewer_groups & creator_groups
-            for gid in shared_groups:
-                group_requests_by_chat.setdefault(gid, []).append(r)
+    # Group requests by group_id
+    requests_by_group = {}
+    for req, shared_groups in filtered_requests:
+        for gid in shared_groups:
+            requests_by_group.setdefault(gid, []).append(req)
 
-        # For each group, send message
-        for gid, reqs in group_requests_by_chat.items():
-            group_name = get_group_title(gid)
-            title_username = "Anonymous" if username is None else username
-            keyboard_buttons = []
-            for r in reqs:
+    # For each group, sort requests by username (anon last)
+    for gid, requests in requests_by_group.items():
+        group_name = get_group_title(gid)
+
+        # Group requests by username (anon = None)
+        reqs_by_user = {}
+        for r in requests:
+            key = r.username if not r.is_anonymous else None
+            reqs_by_user.setdefault(key, []).append(r)
+
+        # Sort usernames alphabetically, put None (anonymous) last
+        sorted_usernames = sorted([u for u in reqs_by_user if u is not None], key=lambda x: x.lower())
+        if None in reqs_by_user:
+            sorted_usernames.append(None)
+
+        # Compose message text and buttons
+        message_lines = [f"-- Requests from {group_name} --"]
+        keyboard_buttons = []
+
+        for username in sorted_usernames:
+            display_name = "Anonymous" if username is None else username
+            for r in reqs_by_user[username]:
                 prayed_users = all_prayed.get(r.id, set())
-                prayed = " ✔️" if user_id in prayed_users else ""
-                button_text = f"{title_username}: {r.text}{prayed}"
-                keyboard_buttons.append([InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')])
-            await update.message.reply_text(
-                f"👥 <b>-- Requests from {title_username} in {group_name} --</b>",
-                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
-                parse_mode=ParseMode.HTML
-            )
+                prayed_mark = " ✔️" if user_id in prayed_users else ""
+                message_lines.append(f"{display_name}: {r.text}{prayed_mark}")
+                keyboard_buttons.append([InlineKeyboardButton(f"{display_name}: {r.text}{prayed_mark}", callback_data=f'public_view_{r.id}')])
+
+        message_text = "\n".join(message_lines)
+
+        await update.message.reply_text(
+            message_text,
+            reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+            parse_mode=ParseMode.HTML
+        )
+
 
 async def handle_public_request_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
