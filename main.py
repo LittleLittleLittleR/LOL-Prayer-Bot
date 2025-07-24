@@ -18,8 +18,6 @@ from handle_request import (
     add_request_start,
     add_request_text,
     add_request_anon,
-    select_visibility,
-    select_group,
     my_requests_list,
     handle_my_request_action,
 )
@@ -35,8 +33,6 @@ from handle_prayer import (
 from state import (
     ADD_TEXT, 
     ADD_ANON,
-    SELECT_VISIBILITY, 
-    SELECT_GROUP,
     PRAY_TEXT, 
     PRAY_AUDIO,
 )
@@ -82,8 +78,6 @@ add_request_conv = ConversationHandler(
     states={
         ADD_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_request_text)],
         ADD_ANON: [CallbackQueryHandler(add_request_anon, pattern='^anon_')],
-        SELECT_VISIBILITY: [CallbackQueryHandler(select_visibility, pattern='^vis_')],
-        SELECT_GROUP: [CallbackQueryHandler(select_group, pattern='^group_select_')],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
     allow_reentry=True,

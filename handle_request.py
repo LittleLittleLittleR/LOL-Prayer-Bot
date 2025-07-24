@@ -8,7 +8,6 @@ import os
 from state import (
     ADD_TEXT, 
     ADD_ANON,
-    SELECT_VISIBILITY,
     PrayerRequest,
 )
 from database import (
@@ -55,73 +54,33 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_anon = query.data == 'anon_yes'
     context.user_data['is_anon'] = is_anon
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton('🌐 Public (anyone)', callback_data='vis_public')],
-        [InlineKeyboardButton('👥 Group only', callback_data='vis_group')],
-    ])
-    await query.edit_message_text("Please choose visibility:", reply_markup=keyboard)
-    return SELECT_VISIBILITY
-
-async def select_visibility(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    vis = query.data.split("_", 1)[1]
     user = query.from_user
-
     text = context.user_data.pop('new_request_text', None)
-    is_anon = context.user_data.pop('is_anon', False)
 
     if not text:
         await query.edit_message_text("❌ Error: No text found for your prayer request.")
         return ConversationHandler.END
     
+    # Find shared groups of user and bot
+    user_gs = get_user_groups(user.id)
+    bot_gs = get_user_groups(BOT_ID)
+    shared_groups = user_gs & bot_gs
+
+    if not shared_groups:
+        await query.edit_message_text("⚠️ You are not in any group with the bot, so you can't add a group-only request.")
+        return ConversationHandler.END
+
     req = PrayerRequest(
         id=str(uuid4()),
         user_id=user.id,
         username=user.username or f"user_{user.id}",
         text=text,
         is_anonymous=is_anon,
-        visibility=vis
-    )
-
-    if vis == "group":
-        # Find shared groups of user and bot
-        user_gs = get_user_groups(user.id)
-        bot_gs = get_user_groups(BOT_ID)  # groups where bot is member
-        shared_groups = user_gs & bot_gs
-
-        if not shared_groups:
-            await query.edit_message_text("⚠️ You are not in any group with the bot, so you can't add a group-only request.")
-            return ConversationHandler.END
-
-        insert_prayer_request(req)
-
-        await query.edit_message_text(f"✅ Your group-only prayer request has been added to {len(shared_groups)} group(s).")
-        return ConversationHandler.END
-
-    else:
-        insert_prayer_request(req)
-
-        await query.edit_message_text("✅ Your prayer request has been added.")
-        return ConversationHandler.END
-
-async def select_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    data = context.user_data.pop('pending_request')
-    req = PrayerRequest(
-        id=str(uuid4()),
-        user_id=query.from_user.id,
-        username=query.from_user.username or f"user_{query.from_user.id}",
-        text=data['text'],
-        is_anonymous=data['is_anon'],
-        visibility=data['visibility']
     )
 
     insert_prayer_request(req)
 
-    await query.edit_message_text("✅ Your group-only prayer request has been added.")
+    await query.edit_message_text("✅ Your prayer request has been added.")
     return ConversationHandler.END
 
 # --- List user's own prayer requests ---

@@ -17,8 +17,7 @@ def init_db():
                 user_id INTEGER,
                 username TEXT,
                 text TEXT,
-                is_anonymous BOOLEAN,
-                visibility TEXT
+                is_anonymous BOOLEAN
             )
         ''')
 
@@ -55,7 +54,46 @@ def init_db():
             )
         """)
 
+        remove_visibility_column()
+
+
         conn.commit()
+
+
+def remove_visibility_column():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        # Check if 'visibility' column exists
+        cursor.execute("PRAGMA table_info(Prayer_Requests)")
+        columns = [row["name"] for row in cursor.fetchall()]
+        if "visibility" not in columns:
+            return  # Already removed
+
+        # Rename original table
+        cursor.execute("ALTER TABLE Prayer_Requests RENAME TO Prayer_Requests_old")
+
+        # Create new table without 'visibility'
+        cursor.execute("""
+            CREATE TABLE Prayer_Requests (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                username TEXT,
+                text TEXT,
+                is_anonymous BOOLEAN
+            )
+        """)
+
+        # Copy data
+        cursor.execute("""
+            INSERT INTO Prayer_Requests (id, user_id, username, text, is_anonymous)
+            SELECT id, user_id, username, text, is_anonymous FROM Prayer_Requests_old
+        """)
+
+        # Drop old table
+        cursor.execute("DROP TABLE Prayer_Requests_old")
+        conn.commit()
+
 
 
 # Prayer_Requests functions
@@ -63,9 +101,9 @@ def insert_prayer_request(req: PrayerRequest):
     with get_connection() as conn:
         c = conn.cursor()
         c.execute("""
-            INSERT INTO Prayer_Requests (id, text, user_id, username, is_anonymous, visibility)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (req.id, req.text, req.user_id, req.username, int(req.is_anonymous), req.visibility))
+            INSERT INTO Prayer_Requests (id, text, user_id, username, is_anonymous)
+        VALUES (?, ?, ?, ?, ?)
+        """, (req.id, req.text, req.user_id, req.username, int(req.is_anonymous)))
         conn.commit()
 
 def get_user_requests(user_id):
@@ -78,7 +116,7 @@ def get_request_by_id(req_id: str):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, user_id, username, text, is_anonymous, visibility
+            SELECT id, user_id, username, text, is_anonymous
             FROM Prayer_Requests
             WHERE id = ?
         """, (req_id,))
@@ -90,7 +128,6 @@ def get_request_by_id(req_id: str):
                 username=row[2],
                 text=row[3],
                 is_anonymous=bool(row[4]),
-                visibility=row[5],
             )
         return None
     
@@ -110,7 +147,6 @@ def get_all_prayer_requests() -> list[PrayerRequest]:
                 username=row['username'],
                 text=row['text'],
                 is_anonymous=bool(row['is_anonymous']),
-                visibility=row['visibility']
             ) for row in rows
         ]
     
