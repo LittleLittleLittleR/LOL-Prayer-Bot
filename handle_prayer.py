@@ -103,7 +103,7 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton(joined and '➖ Unjoin' or '➕ Join', callback_data=join_cb)],
     ]
     await query.edit_message_text(
-        f'<b>Prayer Request:</b> {req.text}\n'
+        f'<b>Prayer Request:</b> {req.text}\n',
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
