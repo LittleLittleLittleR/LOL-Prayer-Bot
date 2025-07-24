@@ -121,7 +121,7 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
             return await query.edit_message_text("❌ You do not own this request.")
         keyboard = [[InlineKeyboardButton("❌ Remove", callback_data=f"remove_{req.id}")]]
         return await query.edit_message_text(
-            f"<b>Prayer Request:</b> {req.text}\n"
+            f"<b>Prayer Request:</b> {req.text}\n",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML
         )
