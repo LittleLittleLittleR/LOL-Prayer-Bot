@@ -27,67 +27,66 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     viewer_groups = get_user_groups(user_id)
 
-    public_requests = []
-    group_requests_by_chat = {}
-
     # Fetch all prayer requests
     all_requests = get_all_prayer_requests()
-
+    
+    # Filter out user's own requests and keep only those in shared groups
+    filtered_requests = []
     for r in all_requests:
         if r.user_id == user_id:
             continue
 
-        if r.visibility == "public":
-            public_requests.append(r)
+        creator_groups = get_user_groups(r.user_id)
+        shared_groups = viewer_groups & creator_groups
+        if shared_groups:
+            filtered_requests.append(r)
 
-        elif r.visibility == "group":
-            creator_groups = get_user_groups(user_id)
+    if not filtered_requests:
+        await update.message.reply_text('No prayer requests from others are available.')
+        return
+    
+    # Group requests by username (anonymous usernames will be sorted at the end)
+    requests_by_user = {}
+    for r in filtered_requests:
+        key = r.username if not r.is_anonymous else None
+        requests_by_user.setdefault(key, []).append(r)
+
+    # Sort users alphabetically, placing None (anonymous) last
+    sorted_usernames = sorted(
+        [u for u in requests_by_user.keys() if u is not None],
+        key=lambda x: x.lower()
+    )
+    if None in requests_by_user:
+        sorted_usernames.append(None)
+    
+    all_prayed = get_all_prayed_users()
+
+    # Send group requests by user
+    for username in sorted_usernames:
+        requests = requests_by_user[username]
+        # Group by chat (group_id)
+        group_requests_by_chat = {}
+        for r in requests:
+            creator_groups = get_user_groups(r.user_id)
             shared_groups = viewer_groups & creator_groups
             for gid in shared_groups:
                 group_requests_by_chat.setdefault(gid, []).append(r)
 
-    if not public_requests and not group_requests_by_chat:
-        await update.message.reply_text('No prayer requests from others are available.')
-        return
-    
-    all_prayed = get_all_prayed_users()
-
-    # Send public requests together
-    if public_requests:
-        keyboard_buttons = []
-        for r in public_requests:
-            name = "Anonymous" if r.is_anonymous else r.username
-            prayed_users = all_prayed.get(r.id, set())
-            prayed = " ✔️" if user_id in prayed_users else ""
-            button_text = f"{name}: {r.text}{prayed}"
-            keyboard_buttons.append(
-                [InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')]
+        # For each group, send message
+        for gid, reqs in group_requests_by_chat.items():
+            group_name = get_group_title(gid)
+            title_username = "Anonymous" if username is None else username
+            keyboard_buttons = []
+            for r in reqs:
+                prayed_users = all_prayed.get(r.id, set())
+                prayed = " ✔️" if user_id in prayed_users else ""
+                button_text = f"{title_username}: {r.text}{prayed}"
+                keyboard_buttons.append([InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')])
+            await update.message.reply_text(
+                f"👥 <b>-- Requests from {title_username} in {group_name} --</b>",
+                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+                parse_mode=ParseMode.HTML
             )
-
-        await update.message.reply_text(
-            "<b>-- Public Requests --</b>",
-            reply_markup=InlineKeyboardMarkup(keyboard_buttons),
-            parse_mode=ParseMode.HTML
-        )
-
-    # Batch group requests (per group)
-    for gid, requests in group_requests_by_chat.items():
-        group_name = get_group_title(gid)
-        title = f"<b>-- Requests from {group_name} --</b>"
-        keyboard_buttons = []
-        for r in requests:
-            name = "Anonymous" if r.is_anonymous else r.username
-            prayed_users = all_prayed.get(r.id, set())
-            prayed = " ✔️" if user_id in prayed_users else ""
-            button_text = f"{name}: {r.text}{prayed}"
-            keyboard_buttons.append([
-                InlineKeyboardButton(button_text, callback_data=f'public_view_{r.id}')
-            ])
-        await update.message.reply_text(
-            f"👥 <b>{title}</b> Prayer Requests:",
-            reply_markup=InlineKeyboardMarkup(keyboard_buttons),
-            parse_mode=ParseMode.HTML
-        )
 
 async def handle_public_request_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
