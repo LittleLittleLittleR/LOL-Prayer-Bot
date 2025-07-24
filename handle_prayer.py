@@ -77,7 +77,6 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
             for r in reqs_by_user[username]:
                 prayed_users = all_prayed.get(r.id, set())
                 prayed_mark = " ✔️" if user_id in prayed_users else ""
-                message_lines.append(f"{display_name}: {r.text}{prayed_mark}")
                 keyboard_buttons.append([InlineKeyboardButton(f"{display_name}: {r.text}{prayed_mark}", callback_data=f'public_view_{r.id}')])
 
         message_text = "\n".join(message_lines)
