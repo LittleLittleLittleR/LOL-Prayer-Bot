@@ -59,11 +59,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        '/start - Start the bot\n'
         '/help - Show help\n'
         '/add_request - Add a prayer request\n'
         '/my_requests_list - List and manange your prayer requests\n'
-        '/request_list - List and pray for public prayer requests\n'
+        '/request_list - List and pray for prayer requests\n'
         '/stats - View stats\n'
         '/cancel - Cancel any ongoing conversation\n'
     )
@@ -133,6 +132,10 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_request_actions, pattern='^(pray_|join_|unjoin_)'))
 
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.ALL, handle_group_message))
+
+    # Global cancel handler (responds anytime, inside or outside conversation)
+    app.add_handler(CommandHandler("cancel", cancel))
+
 
     init_db()  # Initialize the database
     

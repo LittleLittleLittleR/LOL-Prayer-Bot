@@ -69,7 +69,7 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
             sorted_usernames.append(None)
 
         # Compose message text and buttons
-        message_lines = [f"-- Requests from {group_name} --"]
+        message_lines = [f"<b>-- {group_name} --</b>"]
         keyboard_buttons = []
 
         for username in sorted_usernames:
@@ -103,21 +103,23 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton(joined and '➖ Unjoin' or '➕ Join', callback_data=join_cb)],
     ]
     await query.edit_message_text(
-        f'*Prayer Request: *{req.text}',
+        f'<b>Prayer Request:</b> {req.text}\n'
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def handle_request_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Get the username of person that prayed
     query = update.callback_query
     await query.answer()
     action, req_id = query.data.split('_', 1)
     req = get_request_by_id(req_id)
     user_id = query.from_user.id
+    username = query.from_user.username or f"user_{user_id}"
     if action == 'pray':
         mark_prayed(user_id, req.id)
 
-        message = f'Someone prayed for your request: {req.text}'
+        message = f'🙏 {username} has prayed for your request:\n'
         await context.bot.send_message(chat_id=req.user_id, text=message)
 
         notify = f'Someone prayed for a request you joined: {req.text}'
@@ -139,6 +141,7 @@ async def pray_text_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
     query = update.callback_query
+
     await query.answer()
     req_id = query.data.split('_', 1)[1]
     context.user_data['praying_req'] = req_id
@@ -146,11 +149,14 @@ async def pray_text_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PRAY_TEXT
 
 async def pray_text_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    username = update.effective_user.username or f"user_{update.effective_user.id}"
+    
     req_id = context.user_data.pop('praying_req', None)
     if req_id:
         req = get_request_by_id(req_id)
         message = (
-            f'✍️ Someone sent a written prayer\n'
+            f'✍️ {username} has sent a written prayer:\n'
             f'<b>Request:</b> {req.text}\n'
             f'<b>Prayer:</b> {update.message.text}'
         )
@@ -174,10 +180,12 @@ async def pray_audio_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PRAY_AUDIO
 
 async def pray_audio_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or f"user_{update.effective_user.id}"
+
     req_id = context.user_data.pop('praying_req', None)
     if req_id and update.message.voice:
         req = get_request_by_id(req_id)
-        caption = f'🎤 Someone sent an audio prayer\n<b>Request:</b> {req.text}'
+        caption = f'🎤 {username} sent an audio prayer\n<b>Request:</b> {req.text}'
         await context.bot.send_voice(
             chat_id=req.user_id,
             voice=update.message.voice.file_id,
