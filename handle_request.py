@@ -11,7 +11,7 @@ from state import (
     PrayerRequest,
 )
 from database import (
-    get_user_requests,
+    get_prayer_requests,
     insert_prayer_request,
     get_request_by_id,
     delete_request_by_id,
@@ -90,7 +90,7 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-    my_requests = get_user_requests(user_id)
+    my_requests = get_prayer_requests(user_id)
     if not my_requests:
         await update.message.reply_text("You haven't added any prayer requests yet. Use /add_request to start.")
         return
@@ -130,5 +130,7 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
         req = get_request_by_id(req_id)
         if req and req.user_id == user_id:
             delete_request_by_id(req_id)
-            return await query.edit_message_text("✅ Your request has been removed.")
-        return await query.edit_message_text("❌ Could not remove the request.")
+            await query.edit_message_text("✅ Your request has been removed.")
+        else:
+            await query.edit_message_text("❌ Could not remove the request.")
+        return ConversationHandler.END

@@ -116,13 +116,18 @@ async def handle_request_actions(update: Update, context: ContextTypes.DEFAULT_T
     req = get_request_by_id(req_id)
     user_id = query.from_user.id
     username = query.from_user.username or f"user_{user_id}"
+
+    if not req:
+        await query.edit_message_text("⚠️ This prayer request no longer exists.")
+        return
+
     if action == 'pray':
         mark_prayed(user_id, req.id)
 
-        message = f'🙏 {username} has prayed for your request:\n'
+        message = f'🙏 {username} has prayed for your request:\n{req.text}'
         await context.bot.send_message(chat_id=req.user_id, text=message)
 
-        notify = f'Someone prayed for a request you joined: {req.text}'
+        notify = f'🙏 {username} has prayed for a request you joined: {req.text}'
         joined_users = get_joined_users(req.id)
         for uid in joined_users:
             if uid != user_id:

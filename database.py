@@ -56,21 +56,23 @@ def init_db():
 
         conn.commit()
 
+def get_all_user_ids() -> list[int]:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT user_id FROM Prayer_Requests")
+        return [row[0] for row in cursor.fetchall()]
 
 # Prayer_Requests functions
-def insert_prayer_request(req: PrayerRequest):
-    with get_connection() as conn:
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO Prayer_Requests (id, text, user_id, username, is_anonymous)
-            VALUES (?, ?, ?, ?, ?)
-        """, (req.id, req.text, req.user_id, req.username, int(req.is_anonymous)))
-        conn.commit()
-
-def get_user_requests(user_id):
+def get_prayer_requests(user_id):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, text FROM Prayer_Requests WHERE user_id = ?", (user_id,))
+        return cursor.fetchall()
+    
+def get_all_prayer_requests(user_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, text FROM Prayer_Requests")
         return cursor.fetchall()
 
 def get_request_by_id(req_id: str):
@@ -91,6 +93,15 @@ def get_request_by_id(req_id: str):
                 is_anonymous=bool(row[4]),
             )
         return None
+    
+def insert_prayer_request(req: PrayerRequest):
+    with get_connection() as conn:
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO Prayer_Requests (id, text, user_id, username, is_anonymous)
+            VALUES (?, ?, ?, ?, ?)
+        """, (req.id, req.text, req.user_id, req.username, int(req.is_anonymous)))
+        conn.commit()
 
 def delete_request_by_id(req_id: str):
     with get_connection() as conn:

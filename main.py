@@ -1,7 +1,10 @@
 # main.py
 from telegram import Update
+from telegram.constants import ParseMode
 import asyncio
 import platform
+import requests
+import datetime
 import os
 from dotenv import load_dotenv
 
@@ -13,6 +16,7 @@ from telegram.ext import (
     ConversationHandler,
     filters,
     ContextTypes,
+    CallbackContext,
 )
 from handle_request import (
     add_request_start,
@@ -38,6 +42,8 @@ from state import (
 )
 from database import (
     init_db,
+    get_all_user_ids,
+    get_all_prayer_requests,
     save_user_group_membership,
     save_group_title,
 )
@@ -66,6 +72,43 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         '/stats - View stats\n'
         '/cancel - Cancel any ongoing conversation\n'
     )
+
+async def daily_reminder(context: CallbackContext):
+    app = context.application
+    user_ids = get_all_user_ids()
+    all_requests = get_all_prayer_requests()
+    
+    # Get the verse of the day from OurManna API
+    try:
+        url = "https://beta.ourmanna.com/api/v1/get?format=json&order=daily"
+        headers = {"accept": "application/json"}
+        response = requests.get(url, headers=headers, timeout=5)
+        data = response.json()
+        verse = data['verse']['details']['text']
+        reference = data['verse']['details']['reference']
+        verse_of_the_day = f"{verse} — <i>{reference}</i>"
+    except Exception as e:
+        print(f"Failed to get verse of the day: {e}")
+        verse_of_the_day = "Stay faithful and trust in the Lord today!"
+
+    for uid in user_ids:
+
+        # Count requests that are not from the user
+        count = sum(1 for req in all_requests if req.user_id != uid)
+
+        daily_text = (
+            "<b>-- Daily Prayer Reminder --</b>\n\n"
+            f"{verse_of_the_day}\n\n"
+            f"There are {count} prayer request{'s' if count != 1 else ''} today.\n"
+            "You can view these prayer requests using the /request_list command."
+        )
+
+        # Only send to private chats (positive user IDs)
+        if uid > 0:
+            try:
+                await app.bot.send_message(chat_id=uid, text=daily_text, parse_mode=ParseMode.HTML)
+            except Exception as e:
+                print(f"Failed to send to {uid}: {e}")
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cancelled. You can start again anytime.")
@@ -133,9 +176,15 @@ def main():
 
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.ALL, handle_group_message))
 
+    # Daily reminder
+    app.job_queue.run_daily(
+        daily_reminder, 
+        time=datetime.time(hour=9, minute=0), 
+        days=(0, 1, 2, 3, 4, 5, 6)
+    )
+
     # Global cancel handler (responds anytime, inside or outside conversation)
     app.add_handler(CommandHandler("cancel", cancel))
-
 
     init_db()  # Initialize the database
     
