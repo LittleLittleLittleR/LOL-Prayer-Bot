@@ -49,9 +49,15 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Group requests by group_id
     requests_by_group = {}
+    assigned_request_ids = set()
+
     for req, shared_groups in filtered_requests:
-        for gid in shared_groups:
-            requests_by_group.setdefault(gid, []).append(req)
+        if req.id in assigned_request_ids:
+            continue  # already assigned
+        
+        chosen_gid = min(shared_groups)  # deterministic selection
+        requests_by_group.setdefault(chosen_gid, []).append(req)
+        assigned_request_ids.add(req.id)
 
     # For each group, sort requests by username (anon last)
     for gid, requests in requests_by_group.items():
