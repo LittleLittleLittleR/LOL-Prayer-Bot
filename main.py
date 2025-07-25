@@ -1,6 +1,7 @@
 # main.py
 from telegram import Update
 from telegram.constants import ParseMode
+from pytz import timezone
 import asyncio
 import platform
 import requests
@@ -44,6 +45,7 @@ from database import (
     init_db,
     get_all_user_ids,
     get_all_prayer_requests,
+    get_user_groups,
     save_user_group_membership,
     save_group_title,
 )
@@ -92,23 +94,31 @@ async def daily_reminder(context: CallbackContext):
         verse_of_the_day = "Stay faithful and trust in the Lord today!"
 
     for uid in user_ids:
+        if uid <= 0:
+            continue  # Skip non-private chats
 
-        # Count requests that are not from the user
-        count = sum(1 for req in all_requests if req.user_id != uid)
+        viewer_groups = get_user_groups(uid)
+
+        # Filter requests visible to this user
+        visible_requests = 0
+        for req in all_requests:
+            if req.user_id == uid:
+                continue  # Skip own requests
+            creator_groups = get_user_groups(req.user_id)
+            if viewer_groups & creator_groups:
+                visible_requests += 1
 
         daily_text = (
             "<b>-- Daily Prayer Reminder --</b>\n\n"
             f"{verse_of_the_day}\n\n"
-            f"There are {count} prayer request{'s' if count != 1 else ''} today.\n"
+            f"There are {visible_requests} prayer request{'s' if visible_requests != 1 else ''} today.\n"
             "You can view these prayer requests using the /request_list command."
         )
 
-        # Only send to private chats (positive user IDs)
-        if uid > 0:
-            try:
-                await app.bot.send_message(chat_id=uid, text=daily_text, parse_mode=ParseMode.HTML)
-            except Exception as e:
-                print(f"Failed to send to {uid}: {e}")
+        try:
+            await app.bot.send_message(chat_id=uid, text=daily_text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            print(f"Failed to send to {uid}: {e}")
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cancelled. You can start again anytime.")
@@ -179,7 +189,7 @@ def main():
     # Daily reminder
     app.job_queue.run_daily(
         daily_reminder, 
-        time=datetime.time(hour=9, minute=0), 
+        time=datetime.time(hour=9, tzinfo=timezone("Asia/Singapore")),
         days=(0, 1, 2, 3, 4, 5, 6)
     )
 
