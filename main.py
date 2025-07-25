@@ -62,14 +62,14 @@ if platform.system() == 'Windows':
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text('Hello! I am the LOL Prayer Bot.')
+    await update.message.reply_text('Hello! I am the Light Of Life prayer bot.')
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         '/help - Show help\n'
         '/add_request - Add a prayer request\n'
-        '/my_requests_list - List and manange your prayer requests\n'
+        '/my_requests_list - List and manage own prayer requests\n'
         '/request_list - List and pray for prayer requests\n'
         '/stats - View stats\n'
         '/cancel - Cancel any ongoing conversation\n'
@@ -121,7 +121,7 @@ async def daily_reminder(context: CallbackContext):
             print(f"Failed to send to {uid}: {e}")
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Cancelled. You can start again anytime.")
+    await update.message.reply_text("Cancelled task. You can start again anytime.")
     return ConversationHandler.END
 
 # ─── Conversation Handlers ───────────────────────────────────────────────────
