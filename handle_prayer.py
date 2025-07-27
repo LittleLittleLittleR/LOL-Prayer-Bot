@@ -7,7 +7,7 @@ from state import (
     PRAY_AUDIO,
 )
 from database import (
-    get_request_by_id,
+    get_request_by_rid,
     get_all_prayer_requests,
     get_user_groups,
     get_group_title,
@@ -98,7 +98,7 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
     query = update.callback_query
     await query.answer()
     req_id = query.data.split('_', 2)[2]
-    req = get_request_by_id(req_id)
+    req = get_request_by_rid(req_id)
     joined_users = get_joined_users(req.id)
     joined = query.from_user.id in joined_users
     join_cb = f'unjoin_{req.id}' if joined else f'join_{req.id}'
@@ -119,7 +119,7 @@ async def handle_request_actions(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     action, req_id = query.data.split('_', 1)
-    req = get_request_by_id(req_id)
+    req = get_request_by_rid(req_id)
     user_id = query.from_user.id
     username = query.from_user.username or f"user_{user_id}"
 
@@ -165,7 +165,7 @@ async def pray_text_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     req_id = context.user_data.pop('praying_req', None)
     if req_id:
-        req = get_request_by_id(req_id)
+        req = get_request_by_rid(req_id)
         message = (
             f'✍️ {username} has sent a written prayer:\n'
             f'<b>Request:</b> {req.text}\n'
@@ -195,7 +195,7 @@ async def pray_audio_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     req_id = context.user_data.pop('praying_req', None)
     if req_id and update.message.voice:
-        req = get_request_by_id(req_id)
+        req = get_request_by_rid(req_id)
         caption = f'🎤 {username} sent an audio prayer\n<b>Request:</b> {req.text}'
         await context.bot.send_voice(
             chat_id=req.user_id,

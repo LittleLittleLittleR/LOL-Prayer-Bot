@@ -11,9 +11,10 @@ from state import (
     PrayerRequest,
 )
 from database import (
-    get_prayer_requests,
+    get_prayer_requests_by_user,
+    get_joined_requests_by_user,
     insert_prayer_request,
-    get_request_by_id,
+    get_request_by_rid,
     delete_request_by_id,
     get_user_groups,
 )
@@ -61,15 +62,6 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Error: No text found for your prayer request.")
         return ConversationHandler.END
     
-    # Find shared groups of user and bot
-    user_gs = get_user_groups(user.id)
-    bot_gs = get_user_groups(BOT_ID)
-    shared_groups = user_gs & bot_gs
-
-    if not shared_groups:
-        await query.edit_message_text("⚠️ You are not in any group with the bot, so you can't add a group-only request.")
-        return ConversationHandler.END
-
     req = PrayerRequest(
         id=str(uuid4()),
         user_id=user.id,
@@ -77,10 +69,31 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=text,
         is_anonymous=is_anon,
     )
-
     insert_prayer_request(req)
+    
+    # Find shared groups of user and bot
+    user_gs = get_user_groups(user.id)
+    bot_gs = get_user_groups(BOT_ID)
+    shared_groups = user_gs & bot_gs
 
-    await query.edit_message_text("✅ Your prayer request has been added.")
+    if not shared_groups:
+        await query.edit_message_text(
+            "⚠️ You are not in any shared groups with the bot. Your request will only be visible to you."
+        )
+    else:
+        # Notify all groups where the bot is a member
+        for group_id in shared_groups:
+            message = (
+                f"<b>-- New prayer request --</b>\n"
+                f"Private message the bot and use /requests_list to view it.\n"
+                f"Let's keep each other in prayer!\n\n"
+            )
+            await context.bot.send_message(
+                chat_id=group_id,
+                text=message,
+                parse_mode=ParseMode.HTML
+            )
+        await query.edit_message_text("✅ Your prayer request has been added.")
     return ConversationHandler.END
 
 # --- List user's own prayer requests ---
@@ -90,16 +103,43 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-    my_requests = get_prayer_requests(user_id)
-    if not my_requests:
-        await update.message.reply_text("You haven't added any prayer requests yet. Use /add_request to start.")
-        return
-    keyboard = [[InlineKeyboardButton(f"{req['text'][:50]}", callback_data=f"view_{req['id']}")] for req in my_requests]
-    keyboard.append([InlineKeyboardButton("➕ Add Request", callback_data="add_new")])
-    await update.message.reply_text(
-        "📝 Your Prayer Requests:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    my_requests = get_prayer_requests_by_user(user_id)
+    joined_request_ids = get_joined_requests_by_user(user_id)
+    joined_requests = [req for rid in joined_request_ids if (req := get_request_by_rid(rid)) is not None]
+
+    keyboard = []
+
+    # Own requests
+    if my_requests:
+        for req in my_requests:
+            keyboard.append([InlineKeyboardButton(f"📌 {req.text[:30]}", callback_data=f"view_{req.id}")])
+
+    # Joined requests
+    if joined_requests:
+        keyboard.append([InlineKeyboardButton(" ", callback_data="noop")])  # spacing
+        for req in joined_requests:
+            text = f"{req.username}: {req.text[:30]}" if req.username else req.text[:30]
+            keyboard.append([InlineKeyboardButton(f"🤝 {text}", callback_data=f"view_{req.id}")])
+
+    keyboard.append([InlineKeyboardButton("➕ Add New Request", callback_data="add_new")])
+
+    if not my_requests and not joined_requests:
+        text = "😕 You haven’t made or joined any prayer requests yet."
+    else:
+        text = "<b>-- Your Prayer Requests --</b>"
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
+    elif update.message:
+        await update.message.reply_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
 
 # --- Handle view and removal of user's requests ---
 async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -114,23 +154,32 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
 
     if data.startswith("view_"):
         req_id = data.split("_", 1)[1]
-        req = get_request_by_id(req_id)
+        req = get_request_by_rid(req_id)
         if not req:
             return await query.edit_message_text("⚠️ This request no longer exists.")
         if req.user_id != user_id:
             return await query.edit_message_text("❌ You do not own this request.")
-        keyboard = [[InlineKeyboardButton("❌ Remove", callback_data=f"remove_{req.id}")]]
+        
+        keyboard = [
+            [InlineKeyboardButton("❌ Remove", callback_data=f"remove_{req.id}")],
+            [InlineKeyboardButton("Back", callback_data="back_to_list")]
+        ]
         return await query.edit_message_text(
-            f"<b>Prayer Request:</b> {req.text}\n",
+            f"<b>-- Prayer Request --</b>\n\n{req.text}\n",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML
         )
+    
     if data.startswith("remove_"):
         req_id = data.split("_", 1)[1]
-        req = get_request_by_id(req_id)
+        req = get_request_by_rid(req_id)
         if req and req.user_id == user_id:
             delete_request_by_id(req_id)
-            await query.edit_message_text("✅ Your request has been removed.")
+            return await my_requests_list(update, context)
         else:
             await query.edit_message_text("❌ Could not remove the request.")
         return ConversationHandler.END
+    
+    if data == "back_to_list":
+        await query.answer()
+        return await my_requests_list(update, context)

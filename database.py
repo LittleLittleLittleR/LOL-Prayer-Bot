@@ -63,19 +63,37 @@ def get_all_user_ids() -> list[int]:
         return [row[0] for row in cursor.fetchall()]
 
 # Prayer_Requests functions
-def get_prayer_requests(user_id):
+def get_prayer_requests_by_user(user_id) -> list[PrayerRequest]:
+    """Fetch all prayer requests made by a specific user."""
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, text FROM Prayer_Requests WHERE user_id = ?", (user_id,))
-        return cursor.fetchall()
-    
-def get_all_prayer_requests(user_id):
+        cursor.execute("SELECT id, user_id, username, text, is_anonymous FROM Prayer_Requests WHERE user_id = ?", (user_id,))
+        rows = cursor.fetchall()
+        return [
+            PrayerRequest(
+                id=row['id'],
+                user_id=row['user_id'],
+                username=row['username'],
+                text=row['text'],
+                is_anonymous=bool(row['is_anonymous']),
+            )
+            for row in rows
+        ]
+
+def get_joined_requests_by_user(user_id: int):
+    """Fetch all prayer requests joined by a specific user."""
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, text FROM Prayer_Requests")
+        cursor.execute("""
+            SELECT Prayer_Requests.id, Prayer_Requests.text
+            FROM Prayer_Requests
+            JOIN Joined_Users ON Prayer_Requests.id = Joined_Users.request_id
+            WHERE Joined_Users.user_id = ?
+        """, (user_id,))
         return cursor.fetchall()
 
-def get_request_by_id(req_id: str):
+def get_request_by_rid(req_id: str):
+    """Fetch a prayer request by its ID."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -95,6 +113,7 @@ def get_request_by_id(req_id: str):
         return None
     
 def insert_prayer_request(req: PrayerRequest):
+    """Insert a new prayer request into the database."""
     with get_connection() as conn:
         c = conn.cursor()
         c.execute("""
@@ -104,12 +123,14 @@ def insert_prayer_request(req: PrayerRequest):
         conn.commit()
 
 def delete_request_by_id(req_id: str):
+    """Delete a prayer request by its ID."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM Prayer_Requests WHERE id = ?", (req_id,))
         conn.commit()
 
 def get_all_prayer_requests() -> list[PrayerRequest]:
+    """Fetch all prayer requests from the database."""
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM Prayer_Requests").fetchall()
         return [

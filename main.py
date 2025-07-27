@@ -75,11 +75,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         '/cancel - Cancel any ongoing conversation\n'
     )
 
-async def daily_reminder(context: CallbackContext):
-    app = context.application
-    user_ids = get_all_user_ids()
-    all_requests = get_all_prayer_requests()
-    
+def get_VOTD():
+
     # Get the verse of the day from OurManna API
     try:
         url = "https://beta.ourmanna.com/api/v1/get?format=json&order=daily"
@@ -88,10 +85,18 @@ async def daily_reminder(context: CallbackContext):
         data = response.json()
         verse = data['verse']['details']['text']
         reference = data['verse']['details']['reference']
-        verse_of_the_day = f"{verse} — <i>{reference}</i>"
+        return f"{verse} — <i>{reference}</i>"
     except Exception as e:
         print(f"Failed to get verse of the day: {e}")
-        verse_of_the_day = "Stay faithful and trust in the Lord today!"
+        return "Stay faithful and trust in the Lord today!"
+
+
+async def daily_reminder(context: CallbackContext):
+    app = context.application
+    user_ids = get_all_user_ids()
+    all_requests = get_all_prayer_requests()
+
+    verse_of_the_day = get_VOTD()
 
     for uid in user_ids:
         if uid <= 0:
@@ -177,7 +182,7 @@ def main():
 
     # My requests list and removal
     app.add_handler(CommandHandler('my_requests_list', my_requests_list))
-    app.add_handler(CallbackQueryHandler(handle_my_request_action, pattern='^(view_|remove_|add_new)'))
+    app.add_handler(CallbackQueryHandler(handle_my_request_action, pattern='^(view_|remove_|back_to_list|add_new)'))
 
     # Public request list and view/actions
     app.add_handler(CommandHandler('request_list', request_list_command))
