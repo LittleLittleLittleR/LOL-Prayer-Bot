@@ -34,9 +34,9 @@ async def add_request_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text('Please send me your prayer request.')
+        await update.callback_query.edit_message_text("Please type your prayer request:")
     elif update.message:
-        await update.message.reply_text('Please send me your prayer request.')
+        await update.message.reply_text("Please type your prayer request:")
     return ADD_TEXT
 
 async def add_request_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -80,6 +80,8 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "⚠️ You are not in any shared groups with the bot. Your request will only be visible to you."
         )
+        if context.user_data.pop("came_from_list", False):
+            return await my_requests_list(update, context)
     else:
         # Notify all groups where the bot is a member
         for group_id in shared_groups:
@@ -93,13 +95,14 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=message,
                 parse_mode=ParseMode.HTML
             )
+
+        if context.user_data.pop("came_from_list", False):
+            await query.edit_message_text("✅ Added. Returning to your request list...")
+            return await my_requests_list(update, context)
+        else:
+            await query.edit_message_text("✅ Your prayer request has been added.")
             
-    if context.user_data.pop("came_from_list", False):
-        await query.edit_message_text("✅ Added. Returning to your request list...")
-        return await my_requests_list(update, context)
-    else:
-        await query.edit_message_text("✅ Your prayer request has been added.")
-        return ConversationHandler.END
+    return ConversationHandler.END
 
 # --- List user's own prayer requests ---
 async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -109,8 +112,7 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     my_requests = get_prayer_requests_by_user(user_id)
-    joined_request_ids = get_joined_requests_by_user(user_id)
-    joined_requests = [req for rid in joined_request_ids if (req := get_request_by_rid(rid)) is not None]
+    joined_requests = get_joined_requests_by_user(user_id)
 
     keyboard = []
 
@@ -125,8 +127,6 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for req in joined_requests:
             text = f"{req.username}: {req.text[:30]}" if req.username else req.text[:30]
             keyboard.append([InlineKeyboardButton(f"🤝 {text}", callback_data=f"view_{req.id}")])
-
-    keyboard.append([InlineKeyboardButton("➕ Add New Request", callback_data="add_new")])
 
     if not my_requests and not joined_requests:
         text = "😕 You haven’t made or joined any prayer requests yet."
@@ -152,11 +152,6 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     data = query.data
     user_id = query.from_user.id
-
-    if data == "add_new":
-        context.user_data["came_from_list"] = True
-        await query.edit_message_text("Please type your new prayer request:")
-        return ADD_TEXT
     
     if data.startswith("view_"):
         req_id = data.split("_", 1)[1]

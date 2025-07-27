@@ -80,17 +80,29 @@ def get_prayer_requests_by_user(user_id) -> list[PrayerRequest]:
             for row in rows
         ]
 
-def get_joined_requests_by_user(user_id: int):
+def get_joined_requests_by_user(user_id: int) -> list[PrayerRequest]:
     """Fetch all prayer requests joined by a specific user."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT Prayer_Requests.id, Prayer_Requests.text
+            SELECT Prayer_Requests.id, Prayer_Requests.user_id, Prayer_Requests.username,
+                   Prayer_Requests.text, Prayer_Requests.is_anonymous
             FROM Prayer_Requests
             JOIN Joined_Users ON Prayer_Requests.id = Joined_Users.request_id
             WHERE Joined_Users.user_id = ?
         """, (user_id,))
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+        return [
+            PrayerRequest(
+                id=row['id'],
+                user_id=row['user_id'],
+                username=row['username'],
+                text=row['text'],
+                is_anonymous=bool(row['is_anonymous']),
+            )
+            for row in rows
+        ]
+
 
 def get_request_by_rid(req_id: str):
     """Fetch a prayer request by its ID."""
