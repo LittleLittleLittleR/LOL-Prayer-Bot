@@ -181,5 +181,4 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
         return ConversationHandler.END
     
     if data == "back_to_list":
-        await query.answer()
         return await my_requests_list(update, context)

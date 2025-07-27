@@ -107,6 +107,7 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton('Send a written prayer', callback_data=f'textpray_{req.id}')],
         [InlineKeyboardButton('Send an audio prayer', callback_data=f'audiopray_{req.id}')],
         [InlineKeyboardButton(joined and '➖ Unjoin' or '➕ Join', callback_data=join_cb)],
+        [InlineKeyboardButton("Back", callback_data="public_back_to_list")],
     ]
     await query.edit_message_text(
         f'<b>Prayer Request:</b> {req.text}\n',
@@ -118,6 +119,10 @@ async def handle_request_actions(update: Update, context: ContextTypes.DEFAULT_T
     # Get the username of person that prayed
     query = update.callback_query
     await query.answer()
+
+    if query.data == "public_back_to_list":
+        return await request_list_command(update, context)
+
     action, req_id = query.data.split('_', 1)
     req = get_request_by_rid(req_id)
     user_id = query.from_user.id
@@ -127,7 +132,7 @@ async def handle_request_actions(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text("⚠️ This prayer request no longer exists.")
         return
 
-    if action == 'pray':
+    elif action == 'pray':
         mark_prayed(user_id, req.id)
 
         message = f'🙏 {username} has prayed for your request:\n{req.text}'

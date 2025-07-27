@@ -187,7 +187,7 @@ def main():
     # Public request list and view/actions
     app.add_handler(CommandHandler('request_list', request_list_command))
     app.add_handler(CallbackQueryHandler(handle_public_request_view, pattern='^public_view_'))
-    app.add_handler(CallbackQueryHandler(handle_request_actions, pattern='^(pray_|join_|unjoin_)'))
+    app.add_handler(CallbackQueryHandler(handle_request_actions, pattern='^(pray_|join_|unjoin_|public_back_to_list)'))
 
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.ALL, handle_group_message))
 
