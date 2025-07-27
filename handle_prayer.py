@@ -87,11 +87,18 @@ async def request_list_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
         message_text = "\n".join(message_lines)
 
-        await update.message.reply_text(
-            message_text,
-            reply_markup=InlineKeyboardMarkup(keyboard_buttons),
-            parse_mode=ParseMode.HTML
-        )
+        if update.message:
+            await update.message.reply_text(
+                message_text,
+                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+                parse_mode=ParseMode.HTML
+            )
+        elif update.callback_query:
+            await update.callback_query.edit_message_text(
+                message_text,
+                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+                parse_mode=ParseMode.HTML
+            )
 
 
 async def handle_public_request_view(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -93,8 +93,13 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=message,
                 parse_mode=ParseMode.HTML
             )
+            
+    if context.user_data.pop("came_from_list", False):
+        await query.edit_message_text("✅ Added. Returning to your request list...")
+        return await my_requests_list(update, context)
+    else:
         await query.edit_message_text("✅ Your prayer request has been added.")
-    return ConversationHandler.END
+        return ConversationHandler.END
 
 # --- List user's own prayer requests ---
 async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -149,9 +154,10 @@ async def handle_my_request_action(update: Update, context: ContextTypes.DEFAULT
     user_id = query.from_user.id
 
     if data == "add_new":
-        await query.edit_message_text("Redirecting to /add_request")
-        return await add_request_start(update, context)
-
+        context.user_data["came_from_list"] = True
+        await query.edit_message_text("Please type your new prayer request:")
+        return ADD_TEXT
+    
     if data.startswith("view_"):
         req_id = data.split("_", 1)[1]
         req = get_request_by_rid(req_id)
