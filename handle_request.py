@@ -119,14 +119,13 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Own requests
     if my_requests:
         for req in my_requests:
-            keyboard.append([InlineKeyboardButton(f"📌 {req.text[:30]}", callback_data=f"view_{req.id}")])
+            keyboard.append([InlineKeyboardButton(f"{req.text[:50]}", callback_data=f"view_{req.id}")])
 
     # Joined requests
     if joined_requests:
-        keyboard.append([InlineKeyboardButton(" ", callback_data="noop")])  # spacing
         for req in joined_requests:
-            text = f"{req.username}: {req.text[:30]}" if req.username else req.text[:30]
-            keyboard.append([InlineKeyboardButton(f"🤝 {text}", callback_data=f"view_{req.id}")])
+            text = f"joined {req.username}: {req.text[:30]}" if req.username else req.text[:50]
+            keyboard.append([InlineKeyboardButton(f"{text}", callback_data=f"view_{req.id}")])
 
     if not my_requests and not joined_requests:
         text = "😕 You haven’t made or joined any prayer requests yet."
