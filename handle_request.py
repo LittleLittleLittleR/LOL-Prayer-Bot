@@ -80,27 +80,8 @@ async def add_request_anon(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "⚠️ You are not in any shared groups with the bot. Your request will only be visible to you."
         )
-        if context.user_data.pop("came_from_list", False):
-            return await my_requests_list(update, context)
     else:
-        # Notify all groups where the bot is a member
-        for group_id in shared_groups:
-            message = (
-                f"<b>-- New prayer request --</b>\n"
-                f"Private message the bot and use /requests_list to view it.\n"
-                f"Let's keep each other in prayer!\n\n"
-            )
-            await context.bot.send_message(
-                chat_id=group_id,
-                text=message,
-                parse_mode=ParseMode.HTML
-            )
-
-        if context.user_data.pop("came_from_list", False):
-            await query.edit_message_text("✅ Added. Returning to your request list...")
-            return await my_requests_list(update, context)
-        else:
-            await query.edit_message_text("✅ Your prayer request has been added.")
+        await query.edit_message_text("✅ Your prayer request has been added.")
             
     return ConversationHandler.END
 
@@ -128,7 +109,7 @@ async def my_requests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton(f"{text}", callback_data=f"view_{req.id}")])
 
     if not my_requests and not joined_requests:
-        text = "😕 You haven’t made or joined any prayer requests yet."
+        text = "😕 You haven't made or joined any prayer requests yet."
     else:
         text = "<b>-- Your Prayer Requests --</b>"
 
