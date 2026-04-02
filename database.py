@@ -1,10 +1,14 @@
 # database.py
+import os
 import sqlite3
 from collections import defaultdict
 from state import PrayerRequest
 
+def _db_path():
+    return "/tmp/prayerbot.db" if os.environ.get("VERCEL") else "prayerbot.db"
+
 def get_connection():
-    conn = sqlite3.connect("prayerbot.db")
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
