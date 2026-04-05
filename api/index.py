@@ -2,9 +2,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import json
 import asyncio
-from http.server import BaseHTTPRequestHandler
+from fastapi import FastAPI, Request
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -42,6 +41,12 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_ID = int(os.getenv("BOT_ID", "0"))
 
+app = FastAPI()
+
+
+# ======================
+# Handlers (UNCHANGED)
+# ======================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
@@ -76,8 +81,12 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
     save_group_title(chat.id, chat.title or f"Group {chat.id}")
 
 
-def _build_application() -> Application:
-    app = Application.builder().token(BOT_TOKEN).build()
+# ======================
+# Build Telegram App
+# ======================
+
+def build_application() -> Application:
+    application = Application.builder().token(BOT_TOKEN).build()
 
     add_request_conv = ConversationHandler(
         entry_points=[CommandHandler("add_request", add_request_start)],
@@ -103,43 +112,43 @@ def _build_application() -> Application:
         allow_reentry=True,
     )
 
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(add_request_conv)
-    app.add_handler(pray_text_conv)
-    app.add_handler(pray_audio_conv)
-    app.add_handler(CommandHandler("my_requests_list", my_requests_list))
-    app.add_handler(
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(add_request_conv)
+    application.add_handler(pray_text_conv)
+    application.add_handler(pray_audio_conv)
+    application.add_handler(CommandHandler("my_requests_list", my_requests_list))
+    application.add_handler(
         CallbackQueryHandler(handle_my_request_action, pattern="^(view_|remove_|back_to_list|add_new)")
     )
-    app.add_handler(CommandHandler("request_list", request_list_command))
-    app.add_handler(CallbackQueryHandler(handle_public_request_view, pattern="^public_view_"))
-    app.add_handler(
+    application.add_handler(CommandHandler("request_list", request_list_command))
+    application.add_handler(CallbackQueryHandler(handle_public_request_view, pattern="^public_view_"))
+    application.add_handler(
         CallbackQueryHandler(handle_request_actions, pattern="^(pray_|join_|unjoin_|public_back_to_list)")
     )
-    app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.ALL, handle_group_message))
-    app.add_handler(CommandHandler("cancel", cancel))
+    application.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.ALL, handle_group_message))
+    application.add_handler(CommandHandler("cancel", cancel))
 
-    return app
+    return application
 
 
-async def _process_update(update_data: dict):
+telegram_app = build_application()
+
+
+# ======================
+# Webhook Endpoint
+# ======================
+
+@app.post("/api/webhook")
+async def webhook(request: Request):
     init_db()
-    app = _build_application()
-    await app.initialize()
-    update = Update.de_json(update_data, app.bot)
-    await app.process_update(update)
-    await app.shutdown()
 
+    data = await request.json()
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length)
-        update_data = json.loads(body.decode("utf-8"))
-        asyncio.run(_process_update(update_data))
-        self.send_response(200)
-        self.end_headers()
+    update = Update.de_json(data, telegram_app.bot)
 
-    def log_message(self, format, *args):
-        pass
+    await telegram_app.initialize()
+    await telegram_app.process_update(update)
+    await telegram_app.shutdown()
+
+    return {"ok": True}
