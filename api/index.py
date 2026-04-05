@@ -3,7 +3,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
-from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -39,9 +41,37 @@ from database import init_db, save_user_group_membership, save_group_title
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-BOT_ID = int(os.getenv("BOT_ID", "0"))
 
-app = FastAPI()
+
+def _parse_bot_id() -> int:
+    raw_bot_id = os.getenv("BOT_ID", "")
+    if not raw_bot_id:
+        return 0
+    try:
+        return int(raw_bot_id)
+    except ValueError:
+        return 0
+
+
+BOT_ID = _parse_bot_id()
+update_lock = asyncio.Lock()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if not BOT_TOKEN:
+        # Keep the function bootable and fail requests with a useful error.
+        yield
+        return
+
+    await telegram_app.initialize()
+    try:
+        yield
+    finally:
+        await telegram_app.shutdown()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # ======================
@@ -86,6 +116,9 @@ async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYP
 # ======================
 
 def build_application() -> Application:
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN is not configured")
+
     application = Application.builder().token(BOT_TOKEN).build()
 
     add_request_conv = ConversationHandler(
@@ -141,14 +174,27 @@ telegram_app = build_application()
 
 @app.post("/api/webhook")
 async def webhook(request: Request):
-    init_db()
+    if not BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="Missing BOT_TOKEN environment variable")
 
-    data = await request.json()
+    try:
+        init_db()
+        data = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid request payload: {exc}") from exc
 
-    update = Update.de_json(data, telegram_app.bot)
+    try:
+        update = Update.de_json(data, telegram_app.bot)
+        if update is None:
+            raise ValueError("Could not deserialize Telegram update")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid Telegram update: {exc}") from exc
 
-    await telegram_app.initialize()
-    await telegram_app.process_update(update)
-    await telegram_app.shutdown()
+    try:
+        # Prevent concurrent update handling from racing shared app state.
+        async with update_lock:
+            await telegram_app.process_update(update)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to process update: {exc}") from exc
 
     return {"ok": True}

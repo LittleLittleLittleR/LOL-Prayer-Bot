@@ -2,7 +2,6 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import asyncio
 from fastapi import FastAPI, Request, HTTPException
 
 import requests as http_requests
@@ -42,6 +41,9 @@ def _get_votd() -> str:
 
 
 async def _send_daily_reminders():
+    if not BOT_TOKEN:
+        raise RuntimeError("Missing BOT_TOKEN environment variable")
+
     init_db()
 
     bot = Bot(token=BOT_TOKEN)
@@ -95,5 +97,10 @@ async def daily_reminder(request: Request):
         if auth != f"Bearer {CRON_SECRET}":
             raise HTTPException(status_code=401, detail="Unauthorized")
 
-    await _send_daily_reminders()
-    return {"status": "ok"}
+    try:
+        await _send_daily_reminders()
+        return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Daily reminder failed: {exc}") from exc
