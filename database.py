@@ -8,8 +8,10 @@ def _db_path():
     return "/tmp/prayerbot.db" if os.environ.get("VERCEL") else "prayerbot.db"
 
 def get_connection():
-    conn = sqlite3.connect(_db_path())
+    conn = sqlite3.connect(_db_path(), timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def init_db():

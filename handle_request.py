@@ -22,7 +22,18 @@ from database import (
 # Load environment variables
 load_dotenv()
 
-BOT_ID = int(os.getenv("BOT_ID"))
+
+def _parse_bot_id() -> int:
+    raw_bot_id = os.getenv("BOT_ID", "")
+    if not raw_bot_id:
+        return 0
+    try:
+        return int(raw_bot_id)
+    except ValueError:
+        return 0
+
+
+BOT_ID = _parse_bot_id()
 
 
 async def add_request_start(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -106,6 +106,10 @@ async def handle_public_request_view(update: Update, context: ContextTypes.DEFAU
     await query.answer()
     req_id = query.data.split('_', 2)[2]
     req = get_request_by_rid(req_id)
+    if not req:
+        await query.edit_message_text("⚠️ This prayer request no longer exists.")
+        return
+
     joined_users = get_joined_users(req.id)
     joined = query.from_user.id in joined_users
     join_cb = f'unjoin_{req.id}' if joined else f'join_{req.id}'
@@ -178,6 +182,11 @@ async def pray_text_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req_id = context.user_data.pop('praying_req', None)
     if req_id:
         req = get_request_by_rid(req_id)
+        if not req:
+            await update.message.reply_text('⚠️ That prayer request no longer exists.')
+            context.user_data.clear()
+            return ConversationHandler.END
+
         message = (
             f'✍️ {username} has sent a written prayer:\n'
             f'<b>Request:</b> {req.text}\n'
@@ -208,6 +217,11 @@ async def pray_audio_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req_id = context.user_data.pop('praying_req', None)
     if req_id and update.message.voice:
         req = get_request_by_rid(req_id)
+        if not req:
+            await update.message.reply_text('⚠️ That prayer request no longer exists.')
+            context.user_data.clear()
+            return ConversationHandler.END
+
         caption = f'🎤 {username} sent an audio prayer\n<b>Request:</b> {req.text}'
         await context.bot.send_voice(
             chat_id=req.user_id,
