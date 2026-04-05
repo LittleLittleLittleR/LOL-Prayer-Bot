@@ -4,10 +4,5 @@
       "path": "/api/daily_reminder",
       "schedule": "0 1 * * *"
     }
-  ],
-  "functions": {
-    "api/*.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
