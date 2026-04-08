@@ -34,8 +34,3 @@ Telegram prayer bot
 > **Note:** Vercel's serverless filesystem is ephemeral. The SQLite database (`prayerbot.db`) is stored in `/tmp` and will be reset between cold starts. For persistent storage across deployments, consider migrating to an external database such as [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres) or [PlanetScale](https://planetscale.com/).
 
 > **Note:** Multi-step conversations (e.g. `/add_request`) require in-memory state that is not shared across serverless invocations. Each update is handled by an independent function instance, so conversation flows will work within a single session but may not resume after a cold start.
-
-### Deployment on Pythonanywhere
-- create new console
-- `chmod +x deploy.sh`
-- `./deploy.sh`
