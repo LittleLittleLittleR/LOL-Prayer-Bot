@@ -1,5 +1,6 @@
 import sys
 import os
+import html
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, Request, HTTPException
@@ -32,15 +33,25 @@ def _get_votd() -> str:
             headers={"accept": "application/json"},
             timeout=5
         )
+        response.raise_for_status()
         data = response.json()
-        verse = data["verse"]["details"]["text"]
-        reference = data["verse"]["details"]["reference"]
-        return f"{verse} — <i>{reference}</i>"
-    except Exception:
+        details = data.get("verse", {}).get("details", {})
+        verse = str(details.get("text", "")).strip()
+        reference = str(details.get("reference", "")).strip()
+
+        if not verse:
+            raise ValueError("VOTD response did not include verse text")
+
+        # Escape dynamic text because message is sent with ParseMode.HTML.
+        safe_verse = html.escape(verse)
+        safe_reference = html.escape(reference) if reference else "Unknown Reference"
+        return f"{safe_verse} - <i>{safe_reference}</i>"
+    except Exception as exc:
+        print(f"Failed to fetch VOTD: {exc}")
         return "Stay faithful and trust in the Lord today!"
 
 
-async def _send_daily_reminders():
+async def _send_daily_reminders() -> dict:
     if not BOT_TOKEN:
         raise RuntimeError("Missing BOT_TOKEN environment variable")
 
@@ -50,6 +61,15 @@ async def _send_daily_reminders():
     user_ids = get_all_user_ids()
     all_requests = get_all_prayer_requests()
     verse_of_the_day = _get_votd()
+    sent_count = 0
+    failed_count = 0
+    failures = []
+
+    print(
+        "Daily reminder run starting:",
+        f"users={len(user_ids)}",
+        f"requests={len(all_requests)}",
+    )
 
     async with bot:
         for uid in user_ids:
@@ -81,8 +101,23 @@ async def _send_daily_reminders():
                     text=daily_text,
                     parse_mode=ParseMode.HTML
                 )
+                sent_count += 1
             except Exception as e:
+                failed_count += 1
+                failures.append(f"{uid}: {e}")
                 print(f"Failed to send to {uid}: {e}")
+
+    summary = {
+        "users_found": len(user_ids),
+        "requests_found": len(all_requests),
+        "sent": sent_count,
+        "failed": failed_count,
+    }
+    if failures:
+        summary["failure_samples"] = failures[:3]
+
+    print(f"Daily reminder run complete: {summary}")
+    return summary
 
 
 # ======================
@@ -91,6 +126,12 @@ async def _send_daily_reminders():
 
 @app.get("/api/daily_reminder")
 async def daily_reminder(request: Request):
+    print(
+        "Daily reminder endpoint invoked:",
+        f"ua={request.headers.get('user-agent', '')}",
+        f"x-vercel-cron={request.headers.get('x-vercel-cron', '')}",
+    )
+
     # 🔐 Optional security check
     if CRON_SECRET:
         auth = request.headers.get("authorization", "")
@@ -98,8 +139,8 @@ async def daily_reminder(request: Request):
             raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        await _send_daily_reminders()
-        return {"status": "ok"}
+        summary = await _send_daily_reminders()
+        return {"status": "ok", **summary}
     except HTTPException:
         raise
     except Exception as exc:
