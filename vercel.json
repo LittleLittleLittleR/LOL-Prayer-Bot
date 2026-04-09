@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/daily_reminder/index.py": {
-      "maxDuration": 60
-    }
-  },
   "crons": [
     {
       "path": "/api/daily_reminder",
