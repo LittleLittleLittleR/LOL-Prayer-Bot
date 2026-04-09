@@ -65,7 +65,11 @@ def init_db():
 def get_all_user_ids() -> list[int]:
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT user_id FROM Prayer_Requests")
+        cursor.execute("""
+            SELECT DISTINCT user_id FROM Prayer_Requests
+            UNION
+            SELECT DISTINCT user_id FROM Joined_Users
+        """)
         return [row[0] for row in cursor.fetchall()]
 
 # Prayer_Requests functions
