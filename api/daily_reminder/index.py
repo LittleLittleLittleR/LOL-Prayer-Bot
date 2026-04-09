@@ -77,7 +77,7 @@ async def _send_daily_reminders() -> dict:
                 continue
 
             viewer_groups = get_user_groups(uid)
-            visible_requests = 0
+            visible_requests = []
 
             for req in all_requests:
                 if req.user_id == uid:
@@ -85,14 +85,24 @@ async def _send_daily_reminders() -> dict:
 
                 creator_groups = get_user_groups(req.user_id)
                 if viewer_groups & creator_groups:
-                    visible_requests += 1
+                    visible_requests.append(req)
+
+            if visible_requests:
+                request_lines = "\n".join(
+                    f"• {html.escape(req.text)}" for req in visible_requests
+                )
+                requests_section = (
+                    f"📋 <b>Prayer Requests ({len(visible_requests)}):</b>\n"
+                    f"{request_lines}\n\n"
+                    "Use /request_list to view and interact with these requests."
+                )
+            else:
+                requests_section = "There are no prayer requests from others today."
 
             daily_text = (
                 "<b>-- Daily Prayer Reminder --</b>\n\n"
                 f"{verse_of_the_day}\n\n"
-                f"There are {visible_requests} prayer request"
-                f"{'s' if visible_requests != 1 else ''} today.\n"
-                "You can view these prayer requests using the /request_list command."
+                f"{requests_section}"
             )
 
             try:
