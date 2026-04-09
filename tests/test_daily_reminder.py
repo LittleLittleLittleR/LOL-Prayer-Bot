@@ -274,3 +274,29 @@ class TestDailyReminderEndpoint:
                     )
 
         assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_notifies_creator_on_failure(self):
+        """When _send_daily_reminders raises, a Telegram message is sent to the creator."""
+        import index as dr
+
+        with (
+            patch("index.BOT_TOKEN", "fake-token"),
+            patch("index.CREATOR_CHAT_ID", "99999"),
+            patch("index.CRON_SECRET", ""),
+            patch("index._send_daily_reminders", new=AsyncMock(side_effect=RuntimeError("DB error"))),
+        ):
+            mock_bot = AsyncMock()
+            mock_bot.__aenter__ = AsyncMock(return_value=mock_bot)
+            mock_bot.__aexit__ = AsyncMock(return_value=False)
+            with patch("index.Bot", return_value=mock_bot):
+                async with AsyncClient(
+                    transport=ASGITransport(app=dr.app), base_url="http://test"
+                ) as client:
+                    response = await client.get("/api/daily_reminder")
+
+        assert response.status_code == 500
+        mock_bot.send_message.assert_awaited_once()
+        call_kwargs = mock_bot.send_message.call_args.kwargs
+        assert call_kwargs["chat_id"] == 99999
+        assert "DB error" in call_kwargs["text"]
