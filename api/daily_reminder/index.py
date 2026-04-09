@@ -16,6 +16,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CRON_SECRET = os.getenv("CRON_SECRET", "")
+CREATOR_CHAT_ID = os.getenv("CREATOR_CHAT_ID", "")
 
 VOTD_URL = "https://beta.ourmanna.com/api/v1/get?format=json&order=daily"
 
@@ -154,4 +155,19 @@ async def daily_reminder(request: Request):
     except HTTPException:
         raise
     except Exception as exc:
+        if BOT_TOKEN and CREATOR_CHAT_ID:
+            try:
+                creator_id = int(CREATOR_CHAT_ID)
+            except ValueError:
+                print(f"CREATOR_CHAT_ID is not a valid integer: {CREATOR_CHAT_ID!r}")
+                creator_id = None
+            if creator_id is not None:
+                try:
+                    async with Bot(token=BOT_TOKEN) as bot:
+                        await bot.send_message(
+                            chat_id=creator_id,
+                            text=f"⚠️ Daily reminder failed to send today.\n\nError: {exc}",
+                        )
+                except Exception as notify_exc:
+                    print(f"Failed to notify creator: {notify_exc}")
         raise HTTPException(status_code=500, detail=f"Daily reminder failed: {exc}") from exc
